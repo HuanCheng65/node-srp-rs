@@ -1,28 +1,49 @@
-use num_bigint::{BigInt, Sign};
-use rand::thread_rng;
-use rand::RngCore;
+use rug::{rand::RandState, Assign, Complete, Integer};
 use std::fmt;
 
 pub struct SrpInteger {
-  value: BigInt,
+  value: Integer,
   hex_length: Option<usize>,
 }
 
 impl SrpInteger {
   pub const ZERO: SrpInteger = SrpInteger {
-    value: BigInt::ZERO,
+    value: Integer::ZERO,
     hex_length: None,
   };
 
+  // Efficiently create from bytes
+  pub fn from_bytes(bytes: &[u8]) -> Self {
+    let value = Integer::from_digits(bytes, rug::integer::Order::Msf);
+    Self {
+      value,
+      hex_length: Some(bytes.len() * 2), // Each byte corresponds to two hex characters
+    }
+  }
+
+  // Write binary representation directly to vector to avoid hex conversion
+  pub fn write_binary_to_vec(&self, vec: &mut Vec<u8>) {
+    vec.clear();
+
+    // Calculate required bytes (enough to contain the integer)
+    let req_size = (self.value.significant_bits() as usize + 7) / 8;
+
+    // Ensure vector has sufficient capacity
+    if vec.capacity() < req_size {
+      vec.reserve(req_size + 64);
+    }
+
+    let bytes = self.value.to_digits::<u8>(rug::integer::Order::Msf);
+    vec.extend_from_slice(&bytes);
+  }
+
   pub fn from_hex(hex: &str) -> Self {
-    // 清理输入（与JS版本一致）
+    // Clean input
     let cleaned_hex = hex.trim().replace(" ", "").replace("\n", "");
 
-    // 使用与JS相同的方式：0x前缀 + 十六进制字符串
-    let value = match BigInt::parse_bytes(cleaned_hex.as_bytes(), 16) {
-      Some(v) => v,
-      None => panic!("Invalid hex string: {}", hex),
-    };
+    let value = Integer::parse_radix(&cleaned_hex, 16)
+      .expect(&format!("Invalid hex string: {}", hex))
+      .complete();
 
     Self {
       value,
@@ -35,9 +56,8 @@ impl SrpInteger {
       panic!("This SrpInteger has no specified length");
     }
 
-    let hex = self.value.to_str_radix(16).to_lowercase();
+    let hex = self.value.to_string_radix(16).to_lowercase();
 
-    // 确保和JS版本一样填充前导零
     if let Some(len) = self.hex_length {
       if hex.len() < len {
         return "0".repeat(len - hex.len()) + &hex;
@@ -48,30 +68,66 @@ impl SrpInteger {
   }
 
   pub fn random_integer(bytes: usize) -> Self {
-    let mut rng = thread_rng();
-    let mut buf = vec![0u8; bytes];
-    rng.fill_bytes(&mut buf);
+    // Create a random state
+    let mut rand = RandState::new();
+    // Create random integer of specified size
+    let mut value = Integer::new();
+    value.assign(Integer::random_bits(bytes as u32 * 8, &mut rand));
 
-    // 转换为十六进制字符串
-    let hex = hex::encode(&buf);
-    Self::from_hex(&hex)
+    // Convert to hex and retain length information
+    let hex = value.to_string_radix(16);
+    let hex_len = hex.len();
+
+    Self {
+      value,
+      hex_length: Some(hex_len),
+    }
   }
 
   pub fn equals(&self, other: &Self) -> bool {
     self.value == other.value
   }
 
+  // Calculate (B - kg^x) ^ (a + ux)
+  pub fn subtract_mult_pow(
+    &self,
+    k: &Self,
+    g: &Self,
+    x: &Self,
+    a: &Self,
+    u: &Self,
+    modulus: &Self,
+  ) -> Self {
+    let gx = g.mod_pow(x, modulus);
+    let kgx = k.multiply(&gx);
+    let B_minus_kgx = self.subtract(&kgx).mod_(modulus);
+    let ux = u.multiply(x);
+    let a_plus_ux = a.add(&ux);
+    B_minus_kgx.mod_pow(&a_plus_ux, modulus)
+  }
+
+  // Calculate kv + g^b
+  pub fn add_mult_pow(&self, k: &Self, v: &Self, g: &Self, b: &Self, modulus: &Self) -> Self {
+    let gb = g.mod_pow(b, modulus);
+    let kv = k.multiply(v);
+    kv.add(&gb).mod_(modulus)
+  }
+
   pub fn mod_pow(&self, exp: &Self, modulus: &Self) -> Self {
-    let result = self.value.modpow(&exp.value, &modulus.value);
+    let result = self
+      .value
+      .clone()
+      .pow_mod(&exp.value, &modulus.value)
+      .expect("Modular exponentiation failed");
 
     Self {
       value: result,
-      hex_length: modulus.hex_length, // 使用modulus的长度，与JS一致
+      hex_length: modulus.hex_length,
     }
   }
 
   pub fn multiply(&self, other: &Self) -> Self {
-    let result = &self.value * &other.value;
+    let result = (&self.value * &other.value).complete();
 
     Self {
       value: result,
@@ -80,7 +136,7 @@ impl SrpInteger {
   }
 
   pub fn add(&self, other: &Self) -> Self {
-    let result = &self.value + &other.value;
+    let result = (&self.value + &other.value).complete();
 
     Self {
       value: result,
@@ -89,7 +145,7 @@ impl SrpInteger {
   }
 
   pub fn subtract(&self, other: &Self) -> Self {
-    let result = &self.value - &other.value;
+    let result = (&self.value - &other.value).complete();
 
     Self {
       value: result,
@@ -98,10 +154,11 @@ impl SrpInteger {
   }
 
   pub fn mod_(&self, modulus: &Self) -> Self {
-    let mut result = &self.value % &modulus.value;
+    let mut result = self.value.clone();
+    result %= &modulus.value;
 
-    // 确保结果为正，与JS一致
-    if result < BigInt::from(0) {
+    // Ensure result is positive
+    if result < 0 {
       result += &modulus.value;
     }
 
@@ -112,40 +169,18 @@ impl SrpInteger {
   }
 
   pub fn xor(&self, other: &Self) -> Self {
-    // 转为十六进制，确保长度匹配
-    let a_hex = self.to_hex();
-    let b_hex = other.to_hex();
+    let result = (&self.value ^ &other.value).complete();
 
-    // 确保两者长度相同
-    let a_bytes = hex::decode(&a_hex).unwrap();
-    let b_bytes = hex::decode(&b_hex).unwrap();
-
-    // 确保等长度（使用相同的填充逻辑）
-    let max_len = std::cmp::max(a_bytes.len(), b_bytes.len());
-    let mut a_padded = vec![0; max_len - a_bytes.len()];
-    let mut b_padded = vec![0; max_len - b_bytes.len()];
-
-    a_padded.extend_from_slice(&a_bytes);
-    b_padded.extend_from_slice(&b_bytes);
-
-    // 执行异或操作
-    let xor_result: Vec<u8> = a_padded
-      .iter()
-      .zip(b_padded.iter())
-      .map(|(a, b)| a ^ b)
-      .collect();
-
-    // 保持与JS一致的长度处理
     Self {
-      value: BigInt::from_bytes_be(Sign::Plus, &xor_result),
-      hex_length: self.hex_length,
+      value: result,
+      hex_length: self.hex_length.or(other.hex_length),
     }
   }
 }
 
 impl fmt::Debug for SrpInteger {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    let hex = self.value.to_str_radix(16);
+    let hex = self.value.to_string_radix(16);
     if hex.len() > 16 {
       write!(f, "<SrpInteger {}{}>", &hex[0..16], "...")
     } else {

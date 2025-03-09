@@ -1,4 +1,4 @@
-use crate::params::{self, H_str, H, HASH_OUTPUT_BYTES};
+use crate::params::{self, h_N_xor_h_g, H_str, H, HASH_OUTPUT_BYTES};
 use crate::srp_integer::SrpInteger;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -92,7 +92,6 @@ pub fn derive_session(
   let g = &*params::g;
   let k = &*params::k;
 
-  // 解析输入参数
   let a = SrpInteger::from_hex(&client_secret_ephemeral);
   let B = SrpInteger::from_hex(&server_public_ephemeral);
   let s = SrpInteger::from_hex(&salt);
@@ -116,25 +115,15 @@ pub fn derive_session(
   // u = H(A, B)
   let u = params::H(&[&A, &B]);
 
-  // S = (B - kg^x) ^ (a + ux) mod N
-  let gx = g.mod_pow(&x, N);
-  let kgx = k.multiply(&gx);
-  let B_minus_kgx = B.subtract(&kgx).mod_(N);
-  let ux = u.multiply(&x);
-  let a_plus_ux = a.add(&ux);
-  let S = B_minus_kgx.mod_pow(&a_plus_ux, N);
+  let S = B.subtract_mult_pow(k, g, &x, &a, &u, N);
 
   // K = H(S)
   let K = params::H(&[&S]);
 
   // M = H(H(N) xor H(g), H(I), s, A, B, K)
-  // 精确匹配 JS 实现
-  let h_N = params::H(&[N]);
-  let h_g = params::H(&[g]);
-  let h_N_xor_h_g = h_N.xor(&h_g);
   let h_I = params::H_str(&I);
 
-  // 关键：所有参数**一次性**哈希，而不是嵌套哈希
+  // Use pre-computed h_N_xor_h_g
   let M = params::H(&[&h_N_xor_h_g, &h_I, &s, &A, &B, &K]);
 
   Ok(ClientSession {

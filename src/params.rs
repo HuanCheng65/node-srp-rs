@@ -7,35 +7,42 @@ const G_HEX: &str = "02";
 pub const HASH_OUTPUT_BYTES: usize = 32; // 256 / 8
 
 lazy_static! {
+  // Core parameters
   pub static ref N: SrpInteger = SrpInteger::from_hex(N_HEX);
   pub static ref g: SrpInteger = SrpInteger::from_hex(G_HEX);
   pub static ref k: SrpInteger = H(&[&N, &g]);
+
+  // Pre-computed hash values for performance
+  pub static ref h_N: SrpInteger = H(&[&N]);
+  pub static ref h_g: SrpInteger = H(&[&g]);
+  pub static ref h_N_xor_h_g: SrpInteger = h_N.xor(&h_g);
 }
 
-// 一次性哈希多个 SrpInteger，完全模拟 JS 实现
+pub fn hash_bytes(bytes: &[u8]) -> Vec<u8> {
+  let mut hasher = Sha256::new();
+  hasher.update(bytes);
+  hasher.finalize().to_vec()
+}
+
 pub fn H(args: &[&SrpInteger]) -> SrpInteger {
   let mut hasher = Sha256::new();
 
+  // Pre-allocate buffer to reduce memory allocations
+  let mut buffer = Vec::with_capacity(256); // Reserve sufficient space
+
   for arg in args {
-    // 对 SrpInteger，用十六进制表示并转为二进制更新哈希器
-    let hex = arg.to_hex();
-    let bytes = hex::decode(&hex).unwrap();
-    hasher.update(&bytes);
+    // Get binary representation directly, avoiding hex conversion
+    arg.write_binary_to_vec(&mut buffer);
+    hasher.update(&buffer);
+    buffer.clear(); // Reuse buffer
   }
 
   let result = hasher.finalize();
-  let hex_result = hex::encode(result);
-
-  SrpInteger::from_hex(&hex_result)
+  SrpInteger::from_bytes(&result)
 }
 
-// 哈希一个字符串
+// String hashing function
 pub fn H_str(s: &str) -> SrpInteger {
-  let mut hasher = Sha256::new();
-  hasher.update(s.as_bytes());
-
-  let result = hasher.finalize();
-  let hex_result = hex::encode(result);
-
-  SrpInteger::from_hex(&hex_result)
+  let bytes = hash_bytes(s.as_bytes());
+  SrpInteger::from_bytes(&bytes)
 }

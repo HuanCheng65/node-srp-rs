@@ -1,4 +1,4 @@
-use crate::params::{self, H_str, H, HASH_OUTPUT_BYTES};
+use crate::params::{self, h_N_xor_h_g, H_str, H, HASH_OUTPUT_BYTES};
 use crate::srp_integer::SrpInteger;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -22,9 +22,7 @@ pub fn generate_ephemeral(verifier: String) -> ServerEphemeral {
 
   // B = kv + g^b (b = random number)
   let b = SrpInteger::random_integer(HASH_OUTPUT_BYTES);
-  let gb = g.mod_pow(&b, N);
-  let kv = k.multiply(&v);
-  let B = kv.add(&gb).mod_(N);
+  let B = g.add_mult_pow(k, &v, g, &b, N);
 
   ServerEphemeral {
     secret: b.to_hex(),
@@ -53,7 +51,6 @@ pub fn derive_session(
   let g = &*params::g;
   let k = &*params::k;
 
-  // 解析输入参数
   let b = SrpInteger::from_hex(&server_secret_ephemeral);
   let A = SrpInteger::from_hex(&client_public_ephemeral);
   let s = SrpInteger::from_hex(&salt);
@@ -61,11 +58,8 @@ pub fn derive_session(
   let v = SrpInteger::from_hex(&verifier);
 
   // B = kv + g^b
-  let gb = g.mod_pow(&b, N);
-  let kv = k.multiply(&v);
-  let B = kv.add(&gb).mod_(N);
+  let B = g.add_mult_pow(k, &v, g, &b, N);
 
-  // 检查 A 是否有效
   if A.mod_(N).equals(&SrpInteger::ZERO) {
     return Err(Error::new(
       Status::InvalidArg,
@@ -85,15 +79,11 @@ pub fn derive_session(
   let K = params::H(&[&S]);
 
   // M = H(H(N) xor H(g), H(I), s, A, B, K)
-  let h_N = params::H(&[N]);
-  let h_g = params::H(&[g]);
-  let h_N_xor_h_g = h_N.xor(&h_g);
   let h_I = params::H_str(&I);
 
-  // 跟客户端计算方式一致
+  // Use pre-computed h_N_xor_h_g
   let expected_M = params::H(&[&h_N_xor_h_g, &h_I, &s, &A, &B, &K]);
 
-  // 验证客户端的会话证明
   let actual_M = SrpInteger::from_hex(&client_session_proof);
 
   if !actual_M.equals(&expected_M) {
