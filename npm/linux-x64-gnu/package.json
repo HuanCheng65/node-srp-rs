@@ -1,0 +1,25 @@
+{
+  "name": "node-srp-rs-linux-x64-gnu",
+  "version": "0.0.0",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "node-srp-rs.linux-x64-gnu.node",
+  "files": [
+    "node-srp-rs.linux-x64-gnu.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "libc": [
+    "glibc"
+  ]
+}

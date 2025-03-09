@@ -1,0 +1,44 @@
+{
+  "name": "node-srp-rs",
+  "version": "0.0.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "node-srp-rs",
+    "triples": {
+      "additional": [
+        "x86_64-unknown-linux-musl"
+      ]
+    }
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4",
+    "@ruc-cheese/secure-remote-password": "^0.4.0",
+    "ava": "^6.0.1",
+    "cli-table3": "^0.6.5",
+    "colors": "^1.4.0",
+    "secure-remote-password": "^0.3.1"
+  },
+  "ava": {
+    "timeout": "3m"
+  },
+  "engines": {
+    "node": ">= 10"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "ava",
+    "universal": "napi universal",
+    "version": "napi version",
+    "benchmark": "node benchmark.js"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}
