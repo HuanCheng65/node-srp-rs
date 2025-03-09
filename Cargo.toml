@@ -13,9 +13,17 @@ lazy_static = "1.5.0"
 # Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
 napi = { version = "2.12.2", default-features = false, features = ["napi4"] }
 napi-derive = "2.12.2"
-rug = { version = "1.24.0", features = ["rand", "num-traits"] }
-rand = "0.8"
 sha2 = "0.10.8"
+
+# Use rug on platforms where it works properly
+[target.'cfg(not(any(target_os = "macos", target_env = "msvc")))'.dependencies]
+rug = { version = "1.27", features = ["rand", "num-traits"] }
+
+# Use num-bigint on platforms where rug has issues (macOS and MSVC)
+[target.'cfg(any(target_os = "macos", target_env = "msvc"))'.dependencies]
+num-bigint = { version = "0.4", features = ["rand"] }
+num-traits = "0.2"
+rand = "0.8"
 
 [build-dependencies]
 napi-build = "2.0.1"
