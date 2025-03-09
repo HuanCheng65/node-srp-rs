@@ -7,19 +7,39 @@
 export declare function generateSalt(): string
 /** Derive the private key from user credentials */
 export declare function derivePrivateKey(salt: string, username: string, password: string): string
-/** Derive the password verifier from the private key */
-export declare function deriveVerifier(privateKey: string): string
-/** Generate client's ephemeral key pair */
-export declare function generateClientEphemeral(): ClientEphemeral
 /** Client's session key and proof */
 export interface ClientSession {
   key: string
   proof: string
 }
+/** Derive the password verifier from the private key */
+export declare function deriveVerifier(privateKey: string): string
+/** Generate client's ephemeral key pair */
+export declare function generateClientEphemeral(): ClientEphemeral
 /** Derive the session key and proof on the client side */
 export declare function deriveClientSession(clientSecretEphemeral: string, serverPublicEphemeral: string, salt: string, username: string, privateKey: string, clientPublicEphemeral?: string | undefined | null): ClientSession
 /** Verify the server's session proof */
 export declare function verifySession(clientPublicEphemeral: string, clientSession: ClientSession, serverSessionProof: string): void
+/** Enum representing SRP parameter groups from RFC 5054 */
+export const enum SrpGroup {
+  /** 1024-bit SRP group from RFC 5054 */
+  RFC5054_1024 = 0,
+  /** 1536-bit SRP group from RFC 5054 */
+  RFC5054_1536 = 1,
+  /** 2048-bit SRP group from RFC 5054 */
+  RFC5054_2048 = 2,
+  /** 3072-bit SRP group from RFC 5054 */
+  RFC5054_3072 = 3,
+  /** 4096-bit SRP group from RFC 5054 */
+  RFC5054_4096 = 4
+}
+/** Helper function to create SrpGroup from bit size */
+export declare function srpGroupFromValue(value: number): SrpGroup
+/** Server's session key and proof */
+export interface ServerSession {
+  key: string
+  proof: string
+}
 /** Generate server's ephemeral key pair */
 export declare function generateServerEphemeral(verifier: string): ServerEphemeral
 /** Derive the session key and proof on the server side */
@@ -29,31 +49,34 @@ export declare class ClientEphemeral {
   secret: string
   public: string
 }
+/** Client-side SRP implementation */
+export declare class Client {
+  /** Create a new Client instance with optional parameter group */
+  constructor(group?: SrpGroup | undefined | null)
+  /** Generate a random salt for password hashing */
+  generateSalt(): string
+  /** Derive the private key from user credentials */
+  derivePrivateKey(salt: string, username: string, password: string): string
+  /** Derive the password verifier from the private key */
+  deriveVerifier(privateKey: string): string
+  /** Generate client's ephemeral key pair */
+  generateEphemeral(): ClientEphemeral
+  /** Derive the session key and proof on the client side */
+  deriveSession(clientSecretEphemeral: string, serverPublicEphemeral: string, salt: string, username: string, privateKey: string, clientPublicEphemeral?: string | undefined | null): ClientSession
+  /** Verify the server's session proof */
+  verifySession(clientPublicEphemeral: string, clientSession: ClientSession, serverSessionProof: string): void
+}
 /** Server's ephemeral key pair */
 export declare class ServerEphemeral {
   secret: string
   public: string
 }
-/** Server's session key and proof */
-export declare class ServerSession {
-  key: string
-  proof: string
-}
-export type ClientModule = Client
-/** Client-side SRP implementation */
-export declare class Client {
-  constructor()
-  generateSalt(): string
-  derivePrivateKey(salt: string, username: string, password: string): string
-  deriveVerifier(privateKey: string): string
-  generateEphemeral(): ClientEphemeral
-  deriveSession(clientSecretEphemeral: string, serverPublicEphemeral: string, salt: string, username: string, privateKey: string, clientPublicEphemeral?: string | undefined | null): ClientSession
-  verifySession(clientPublicEphemeral: string, clientSession: ClientSession, serverSessionProof: string): void
-}
-export type ServerModule = Server
 /** Server-side SRP implementation */
 export declare class Server {
-  constructor()
+  /** Create a new Server instance with optional parameter group */
+  constructor(group?: SrpGroup | undefined | null)
+  /** Generate server's ephemeral key pair */
   generateEphemeral(verifier: string): ServerEphemeral
+  /** Derive the session key and proof on the server side */
   deriveSession(serverSecretEphemeral: string, clientPublicEphemeral: string, salt: string, username: string, verifier: string, clientSessionProof: string): ServerSession
 }

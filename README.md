@@ -18,6 +18,7 @@ SRP is a password-authenticated key exchange protocol that allows secure authent
 - 💻 **Native Node.js Bindings**: Seamless integration with Node.js applications
 - 🔄 **API Compatible**: Drop-in replacement for `secure-remote-password`
 - 🧪 **Thoroughly Tested**: Comprehensive test suite ensures correctness
+- 🔐 **RFC 5054 Support**: All five parameter groups (1024, 1536, 2048, 3072, 4096 bits)
 
 ## Installation
 
@@ -39,11 +40,15 @@ pnpm add @ruc-cheese/node-srp-rs
 ### ESM (Recommended)
 
 ```javascript
-import { Client, Server } from '@ruc-cheese/node-srp-rs';
+import { Client, Server, SrpGroup } from '@ruc-cheese/node-srp-rs';
 
-// Create client and server instances
+// Create client and server instances with default parameters (2048-bit group)
 const client = new Client();
 const server = new Server();
+
+// Or specify a different parameter group
+const client4096 = new Client(SrpGroup.RFC5054_4096);
+const server4096 = new Server(SrpGroup.RFC5054_4096);
 
 // Registration phase
 const salt = client.generateSalt();
@@ -93,7 +98,7 @@ console.log(clientSession.key === serverSession.key); // true
 ### CommonJS
 
 ```javascript
-const { Client, Server } = require('@ruc-cheese/node-srp-rs');
+const { Client, Server, SrpGroup } = require('@ruc-cheese/node-srp-rs');
 
 // Same usage as above
 ```
@@ -102,17 +107,43 @@ const { Client, Server } = require('@ruc-cheese/node-srp-rs');
 
 ### Client
 
+- `new Client(group?)`: Creates a new client instance with optional parameter group
 - `client.generateSalt()`: Generates a random salt for password hashing
 - `client.derivePrivateKey(salt, username, password)`: Derives private key from credentials
 - `client.deriveVerifier(privateKey)`: Generates a password verifier from private key
 - `client.generateEphemeral()`: Creates client ephemeral key pair
-- `client.deriveSession(secret, serverPublic, salt, username, privateKey)`: Computes session key and proof
+- `client.deriveSession(secret, serverPublic, salt, username, privateKey, [clientPublic])`: Computes session key and proof
 - `client.verifySession(clientPublic, clientSession, serverProof)`: Verifies server session proof
 
 ### Server
 
+- `new Server(group?)`: Creates a new server instance with optional parameter group
 - `server.generateEphemeral(verifier)`: Creates server ephemeral key pair
 - `server.deriveSession(secret, clientPublic, salt, username, verifier, clientProof)`: Verifies client proof and generates server proof
+
+### SrpGroup Enum
+
+The library supports all five parameter groups defined in RFC 5054:
+
+- `SrpGroup.RFC5054_1024`: 1024-bit group
+- `SrpGroup.RFC5054_1536`: 1536-bit group 
+- `SrpGroup.RFC5054_2048`: 2048-bit group (default)
+- `SrpGroup.RFC5054_3072`: 3072-bit group
+- `SrpGroup.RFC5054_4096`: 4096-bit group
+
+You can also create a group from a bit size using the utility function:
+
+```javascript
+const { srp_group_from_value } = require('@ruc-cheese/node-srp-rs');
+
+try {
+  const group = srp_group_from_value(4096);
+  const client = new Client(group);
+  // ...
+} catch (err) {
+  console.error('Invalid SRP group size');
+}
+```
 
 ## Performance
 

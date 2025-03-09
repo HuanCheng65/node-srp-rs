@@ -100,7 +100,7 @@ impl SrpInteger {
   ) -> Self {
     let gx = g.mod_pow(x, modulus);
     let kgx = k.multiply(&gx);
-    let B_minus_kgx = self.subtract(&kgx).mod_(modulus);
+    let B_minus_kgx = self.subtract(&kgx);
     let ux = u.multiply(x);
     let a_plus_ux = a.add(&ux);
     B_minus_kgx.mod_pow(&a_plus_ux, modulus)
@@ -175,6 +175,26 @@ impl SrpInteger {
       value: result,
       hex_length: self.hex_length.or(other.hex_length),
     }
+  }
+
+  // Check if the integer is zero
+  pub fn is_zero(&self) -> bool {
+    self.equals(&Self::ZERO)
+  }
+
+  // Check if integer is divisible by another integer
+  pub fn is_divisible_by(&self, other: &Self) -> bool {
+    self.modulo(other).is_zero()
+  }
+
+  // Compute modulo
+  pub fn modulo(&self, modulus: &Self) -> Self {
+    self.mod_(modulus)
+  }
+
+  // Get binary representation of integer
+  pub fn to_bytes(&self) -> Vec<u8> {
+    self.value.to_digits::<u8>(rug::integer::Order::Msf)
   }
 }
 

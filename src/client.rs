@@ -1,4 +1,4 @@
-use crate::params::{self, h_N_xor_h_g, H_str, H, HASH_OUTPUT_BYTES};
+use crate::params::{get_group_params, get_h_N_xor_h_g, H_str, SrpGroup, H, HASH_OUTPUT_BYTES};
 use crate::srp_integer::SrpInteger;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -29,13 +29,194 @@ pub fn derive_private_key(salt: String, username: String, password: String) -> S
   x.to_hex()
 }
 
+/// Client's ephemeral key pair
+#[napi]
+pub struct ClientEphemeral {
+  pub secret: String,
+  pub public: String,
+}
+
+/// Client's session key and proof
+#[napi(object)]
+pub struct ClientSession {
+  pub key: String,
+  pub proof: String,
+}
+
+/// Client-side SRP implementation
+#[napi]
+pub struct Client {
+  group: SrpGroup,
+}
+
+#[napi]
+impl Client {
+  /// Create a new Client instance with optional parameter group
+  #[napi(constructor)]
+  pub fn new(group: Option<SrpGroup>) -> Self {
+    Client {
+      group: group.unwrap_or_default(),
+    }
+  }
+
+  /// Generate a random salt for password hashing
+  #[napi]
+  pub fn generate_salt(&self) -> String {
+    generate_salt()
+  }
+
+  /// Derive the private key from user credentials
+  #[napi]
+  pub fn derive_private_key(&self, salt: String, username: String, password: String) -> String {
+    derive_private_key(salt, username, password)
+  }
+
+  /// Derive the password verifier from the private key
+  #[napi]
+  pub fn derive_verifier(&self, private_key: String) -> String {
+    // N    A large safe prime
+    // g    A generator modulo N
+    let (N, g, _) = get_group_params(self.group);
+
+    // x    Private key (derived from password and salt)
+    let x = SrpInteger::from_hex(&private_key);
+
+    // v = g^x (password verifier)
+    let v = g.mod_pow(&x, N);
+
+    v.to_hex()
+  }
+
+  /// Generate client's ephemeral key pair
+  #[napi]
+  pub fn generate_ephemeral(&self) -> ClientEphemeral {
+    // N    A large safe prime
+    // g    A generator modulo N
+    let (N, g, _) = get_group_params(self.group);
+
+    // a    Secret ephemeral value
+    let a = SrpInteger::random_integer(HASH_OUTPUT_BYTES);
+
+    // A = g^a (public ephemeral value)
+    let A = g.mod_pow(&a, N);
+
+    ClientEphemeral {
+      secret: a.to_hex(),
+      public: A.to_hex(),
+    }
+  }
+
+  /// Derive the session key and proof on the client side
+  #[napi]
+  pub fn derive_session(
+    &self,
+    client_secret_ephemeral: String,
+    server_public_ephemeral: String,
+    salt: String,
+    username: String,
+    private_key: String,
+    client_public_ephemeral: Option<String>,
+  ) -> Result<ClientSession> {
+    // N    A large safe prime
+    // g    A generator modulo N
+    // k    Multiplier parameter (k = H(N, g))
+    let (N, g, k) = get_group_params(self.group);
+
+    // a    Secret ephemeral value
+    let a = SrpInteger::from_hex(&client_secret_ephemeral);
+
+    // A    Public ephemeral value
+    let A = match client_public_ephemeral {
+      Some(A_str) => SrpInteger::from_hex(&A_str),
+      None => g.mod_pow(&a, N),
+    };
+
+    // B    Server's public ephemeral value
+    let B = SrpInteger::from_hex(&server_public_ephemeral);
+
+    // Validate that B % N != 0
+    if B.is_zero() || B.modulo(N).is_zero() {
+      return Err(Error::new(
+        Status::InvalidArg,
+        "Server's public ephemeral value is invalid".to_string(),
+      ));
+    }
+
+    // u = H(A, B)
+    let u = H(&[&A, &B]);
+
+    // s    User's salt
+    let s = SrpInteger::from_hex(&salt);
+
+    // x    Private key
+    let x = SrpInteger::from_hex(&private_key);
+
+    // Compute session key
+    // S = (B - k*(g^x))^(a + ux)
+    let S = B.subtract_mult_pow(k, g, &x, &a, &u, N);
+    let K = H(&[&S]);
+
+    // I    Username
+    let I = username;
+
+    // Get hashed value of identity
+    let I_hash = H_str(&I);
+
+    // Use XOR of hash(N) and hash(g)
+    let N_g_xor = get_h_N_xor_h_g(self.group);
+
+    // Generate client's proof
+    // M1 = H(H(N) XOR H(g), H(I), s, A, B, K)
+    let M1 = H(&[N_g_xor, &I_hash, &s, &A, &B, &K]);
+
+    Ok(ClientSession {
+      key: K.to_hex(),
+      proof: M1.to_hex(),
+    })
+  }
+
+  /// Verify the server's session proof
+  #[napi]
+  pub fn verify_session(
+    &self,
+    client_public_ephemeral: String,
+    client_session: ClientSession,
+    server_session_proof: String,
+  ) -> Result<()> {
+    // A    Client's public ephemeral value
+    let A = SrpInteger::from_hex(&client_public_ephemeral);
+
+    // M1    Client's proof
+    let M1 = SrpInteger::from_hex(&client_session.proof);
+
+    // K    Session key
+    let K = hex::decode(&client_session.key)
+      .map_err(|e| Error::new(Status::InvalidArg, e.to_string()))?;
+
+    // M2    Server's proof
+    let M2 = SrpInteger::from_hex(&server_session_proof);
+
+    // Verify that M2 = H(A, M1, K)
+    let expected_M2 = H(&[&A, &M1, &SrpInteger::from_bytes(&K)]);
+
+    if !expected_M2.equals(&M2) {
+      return Err(Error::new(
+        Status::GenericFailure,
+        "Server's proof is invalid".to_string(),
+      ));
+    }
+
+    Ok(())
+  }
+}
+
+// Standalone functions for backward compatibility
 /// Derive the password verifier from the private key
 #[napi]
 pub fn derive_verifier(private_key: String) -> String {
-  // N    A large safe prime
-  // g    A generator modulo N
-  let N = &*params::N;
-  let g = &*params::g;
+  // Default to 2048-bit group for backward compatibility
+  let group = SrpGroup::default();
+  let (N, g, _) = get_group_params(group);
 
   // x    Private key (derived from password and salt)
   let x = SrpInteger::from_hex(&private_key);
@@ -46,36 +227,23 @@ pub fn derive_verifier(private_key: String) -> String {
   v.to_hex()
 }
 
-/// Client's ephemeral key pair
-#[napi]
-pub struct ClientEphemeral {
-  pub secret: String,
-  pub public: String,
-}
-
 /// Generate client's ephemeral key pair
 #[napi(js_name = "generateClientEphemeral")]
 pub fn generate_ephemeral() -> ClientEphemeral {
-  // N    A large safe prime
-  // g    A generator modulo N
-  let N = &*params::N;
-  let g = &*params::g;
+  // Default to 2048-bit group for backward compatibility
+  let group = SrpGroup::default();
+  let (N, g, _) = get_group_params(group);
 
-  // A = g^a (a = random number)
+  // a    Secret ephemeral value
   let a = SrpInteger::random_integer(HASH_OUTPUT_BYTES);
+
+  // A = g^a (public ephemeral value)
   let A = g.mod_pow(&a, N);
 
   ClientEphemeral {
     secret: a.to_hex(),
     public: A.to_hex(),
   }
-}
-
-/// Client's session key and proof
-#[napi(object)]
-pub struct ClientSession {
-  pub key: String,
-  pub proof: String,
 }
 
 /// Derive the session key and proof on the client side
@@ -88,48 +256,15 @@ pub fn derive_session(
   private_key: String,
   client_public_ephemeral: Option<String>,
 ) -> Result<ClientSession> {
-  let N = &*params::N;
-  let g = &*params::g;
-  let k = &*params::k;
-
-  let a = SrpInteger::from_hex(&client_secret_ephemeral);
-  let B = SrpInteger::from_hex(&server_public_ephemeral);
-  let s = SrpInteger::from_hex(&salt);
-  let I = username;
-  let x = SrpInteger::from_hex(&private_key);
-
-  // A = g^a
-  let A = match client_public_ephemeral {
-    Some(public) => SrpInteger::from_hex(&public),
-    None => g.mod_pow(&a, N),
-  };
-
-  // B % N > 0
-  if B.mod_(N).equals(&SrpInteger::ZERO) {
-    return Err(Error::new(
-      Status::InvalidArg,
-      "The server sent an invalid public ephemeral".to_string(),
-    ));
-  }
-
-  // u = H(A, B)
-  let u = params::H(&[&A, &B]);
-
-  let S = B.subtract_mult_pow(k, g, &x, &a, &u, N);
-
-  // K = H(S)
-  let K = params::H(&[&S]);
-
-  // M = H(H(N) xor H(g), H(I), s, A, B, K)
-  let h_I = params::H_str(&I);
-
-  // Use pre-computed h_N_xor_h_g
-  let M = params::H(&[&h_N_xor_h_g, &h_I, &s, &A, &B, &K]);
-
-  Ok(ClientSession {
-    key: K.to_hex(),
-    proof: M.to_hex(),
-  })
+  // Create a default client and use its method
+  Client::new(None).derive_session(
+    client_secret_ephemeral,
+    server_public_ephemeral,
+    salt,
+    username,
+    private_key,
+    client_public_ephemeral,
+  )
 }
 
 /// Verify the server's session proof
@@ -139,21 +274,10 @@ pub fn verify_session(
   client_session: ClientSession,
   server_session_proof: String,
 ) -> Result<()> {
-  // Parse inputs
-  let A = SrpInteger::from_hex(&client_public_ephemeral);
-  let M = SrpInteger::from_hex(&client_session.proof);
-  let K = SrpInteger::from_hex(&client_session.key);
-
-  // Expected proof: H(A, M, K)
-  let expected = H(&[&A, &M, &K]);
-  let actual = SrpInteger::from_hex(&server_session_proof);
-
-  if !actual.equals(&expected) {
-    return Err(Error::new(
-      Status::InvalidArg,
-      "Server provided session proof is invalid".to_string(),
-    ));
-  }
-
-  Ok(())
+  // Create a default client and use its method
+  Client::new(None).verify_session(
+    client_public_ephemeral,
+    client_session,
+    server_session_proof,
+  )
 }
