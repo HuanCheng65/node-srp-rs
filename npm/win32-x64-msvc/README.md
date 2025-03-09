@@ -1,3 +1,3 @@
-# `node-srp-rs-win32-x64-msvc`
+# `@ruc-cheese/node-srp-rs-win32-x64-msvc`
 
-This is the **x86_64-pc-windows-msvc** binary for `node-srp-rs`
+This is the **x86_64-pc-windows-msvc** binary for `@ruc-cheese/node-srp-rs`

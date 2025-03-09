@@ -39,7 +39,7 @@ jobs:
             target: x86_64-unknown-linux-musl
             docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
             build: yarn build --target x86_64-unknown-linux-musl
-    name: stable - ${{ matrix.settings.target }} - node@20
+    name: stable - ${{ matrix.settings.target }} - node@22
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4
@@ -215,6 +215,7 @@ jobs:
         with:
           node-version: 22
           cache: yarn
+          registry-url: https://registry.npmjs.org/
       - name: Install dependencies
         run: yarn install
       - name: Download all artifacts
@@ -228,8 +229,7 @@ jobs:
         shell: bash
       - name: Publish
         if: 'startsWith(github.event.head_commit.message, ''chore(release): publish'')'
-        run: npm publish
+        run: npm publish --access public
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

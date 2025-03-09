@@ -1,8 +1,8 @@
-# node-srp-rs
+# @ruc-cheese/node-srp-rs
 
 A high-performance Secure Remote Password (SRP-6a) protocol implementation for Node.js, powered by Rust.
 
-[![npm version](https://img.shields.io/npm/v/node-srp-rs.svg)](https://www.npmjs.com/package/node-srp-rs)
+[![npm version](https://img.shields.io/npm/v/@ruc-cheese/node-srp-rs.svg)](https://www.npmjs.com/package/@ruc-cheese/node-srp-rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ## Overview
@@ -25,13 +25,13 @@ Install using your preferred package manager:
 
 ```bash
 # npm
-npm install node-srp-rs
+npm install @ruc-cheese/node-srp-rs
 
 # yarn
-yarn add node-srp-rs
+yarn add @ruc-cheese/node-srp-rs
 
 # pnpm
-pnpm add node-srp-rs
+pnpm add @ruc-cheese/node-srp-rs
 ```
 
 ## Usage
@@ -39,7 +39,7 @@ pnpm add node-srp-rs
 ### ESM (Recommended)
 
 ```javascript
-import { Client, Server } from 'node-srp-rs';
+import { Client, Server } from '@ruc-cheese/node-srp-rs';
 
 // Create client and server instances
 const client = new Client();
@@ -93,7 +93,7 @@ console.log(clientSession.key === serverSession.key); // true
 ### CommonJS
 
 ```javascript
-const { Client, Server } = require('node-srp-rs');
+const { Client, Server } = require('@ruc-cheese/node-srp-rs');
 
 // Same usage as above
 ```

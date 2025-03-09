@@ -1,8 +1,12 @@
 {
-  "name": "node-srp-rs",
-  "version": "0.0.0",
+  "name": "@ruc-cheese/node-srp-rs",
+  "version": "0.1.0",
   "main": "index.js",
   "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HuanCheng65/node-srp-rs.git"
+  },
   "napi": {
     "name": "node-srp-rs",
     "triples": {
