@@ -69,8 +69,8 @@ pub fn srp_group_from_value(value: u32) -> Result<SrpGroup> {
 // Static SRP parameters for all groups
 lazy_static! {
   // Core parameters for the default 2048-bit group
-  pub static ref N: SrpInteger = SrpInteger::from_hex(N_2048_HEX);
-  pub static ref g: SrpInteger = SrpInteger::from_hex(G_2048_HEX);
+  pub static ref N: SrpInteger = SrpInteger::from_hex(N_2048_HEX).unwrap();
+  pub static ref g: SrpInteger = SrpInteger::from_hex(G_2048_HEX).unwrap();
   pub static ref k: SrpInteger = H(&[&N, &g]);
 
   // Pre-computed hash values for performance
@@ -79,24 +79,24 @@ lazy_static! {
   pub static ref h_N_xor_h_g: SrpInteger = h_N.xor(&h_g);
 
   // Parameters for all groups
-  pub static ref N_1024: SrpInteger = SrpInteger::from_hex(N_1024_HEX);
-  pub static ref g_1024: SrpInteger = SrpInteger::from_hex(G_1024_HEX);
+  pub static ref N_1024: SrpInteger = SrpInteger::from_hex(N_1024_HEX).unwrap();
+  pub static ref g_1024: SrpInteger = SrpInteger::from_hex(G_1024_HEX).unwrap();
   pub static ref k_1024: SrpInteger = H(&[&N_1024, &g_1024]);
 
-  pub static ref N_1536: SrpInteger = SrpInteger::from_hex(N_1536_HEX);
-  pub static ref g_1536: SrpInteger = SrpInteger::from_hex(G_1536_HEX);
+  pub static ref N_1536: SrpInteger = SrpInteger::from_hex(N_1536_HEX).unwrap();
+  pub static ref g_1536: SrpInteger = SrpInteger::from_hex(G_1536_HEX).unwrap();
   pub static ref k_1536: SrpInteger = H(&[&N_1536, &g_1536]);
 
-  pub static ref N_2048: SrpInteger = SrpInteger::from_hex(N_2048_HEX);
-  pub static ref g_2048: SrpInteger = SrpInteger::from_hex(G_2048_HEX);
+  pub static ref N_2048: SrpInteger = SrpInteger::from_hex(N_2048_HEX).unwrap();
+  pub static ref g_2048: SrpInteger = SrpInteger::from_hex(G_2048_HEX).unwrap();
   pub static ref k_2048: SrpInteger = H(&[&N_2048, &g_2048]);
 
-  pub static ref N_3072: SrpInteger = SrpInteger::from_hex(N_3072_HEX);
-  pub static ref g_3072: SrpInteger = SrpInteger::from_hex(G_3072_HEX);
+  pub static ref N_3072: SrpInteger = SrpInteger::from_hex(N_3072_HEX).unwrap();
+  pub static ref g_3072: SrpInteger = SrpInteger::from_hex(G_3072_HEX).unwrap();
   pub static ref k_3072: SrpInteger = H(&[&N_3072, &g_3072]);
 
-  pub static ref N_4096: SrpInteger = SrpInteger::from_hex(N_4096_HEX);
-  pub static ref g_4096: SrpInteger = SrpInteger::from_hex(G_4096_HEX);
+  pub static ref N_4096: SrpInteger = SrpInteger::from_hex(N_4096_HEX).unwrap();
+  pub static ref g_4096: SrpInteger = SrpInteger::from_hex(G_4096_HEX).unwrap();
   pub static ref k_4096: SrpInteger = H(&[&N_4096, &g_4096]);
 
   // Precomputed hash values for each group for performance
@@ -162,7 +162,7 @@ pub fn H(args: &[&SrpInteger]) -> SrpInteger {
   let result = hasher.finalize();
   let hex_result = hex::encode(result);
 
-  SrpInteger::from_hex(&hex_result)
+  SrpInteger::from_hex(&hex_result).unwrap()
 }
 
 // String hashing function
@@ -173,5 +173,5 @@ pub fn H_str(s: &str) -> SrpInteger {
   let result = hasher.finalize();
   let hex_result = hex::encode(result);
 
-  SrpInteger::from_hex(&hex_result)
+  SrpInteger::from_hex(&hex_result).unwrap()
 }

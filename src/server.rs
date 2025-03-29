@@ -35,14 +35,14 @@ impl Server {
 
   /// Generate server's ephemeral key pair
   #[napi]
-  pub fn generate_ephemeral(&self, verifier: String) -> ServerEphemeral {
+  pub fn generate_ephemeral(&self, verifier: String) -> Result<ServerEphemeral> {
     // N    A large safe prime
     // g    A generator modulo N
     // k    Multiplier parameter (k = H(N, g))
     let (N, g, k) = get_group_params(self.group);
 
     // v    Password verifier
-    let v = SrpInteger::from_hex(&verifier);
+    let v = SrpInteger::from_hex(&verifier).map_err(|e| Error::new(Status::InvalidArg, e))?;
 
     // B = kv + g^b (b = random number)
     let b = SrpInteger::random_integer(HASH_OUTPUT_BYTES);
@@ -50,10 +50,10 @@ impl Server {
     let kv = k.multiply(&v).modulo(N);
     let B = kv.add(&gb).modulo(N);
 
-    ServerEphemeral {
+    Ok(ServerEphemeral {
       secret: b.to_hex(),
       public: B.to_hex(),
-    }
+    })
   }
 
   /// Derive the session key and proof on the server side
@@ -72,22 +72,25 @@ impl Server {
     let (N, g, k) = get_group_params(self.group);
 
     // b    Secret ephemeral value
-    let b = SrpInteger::from_hex(&server_secret_ephemeral);
+    let b = SrpInteger::from_hex(&server_secret_ephemeral)
+      .map_err(|e| Error::new(Status::InvalidArg, e))?;
 
     // A    Client's public ephemeral value
-    let A = SrpInteger::from_hex(&client_public_ephemeral);
+    let A = SrpInteger::from_hex(&client_public_ephemeral)
+      .map_err(|e| Error::new(Status::InvalidArg, e))?;
 
     // s    User's salt
-    let s = SrpInteger::from_hex(&salt);
+    let s = SrpInteger::from_hex(&salt).map_err(|e| Error::new(Status::InvalidArg, e))?;
 
     // v    Password verifier
-    let v = SrpInteger::from_hex(&verifier);
+    let v = SrpInteger::from_hex(&verifier).map_err(|e| Error::new(Status::InvalidArg, e))?;
 
     // I    Username
     let I = username;
 
     // M1   Client's proof of session key
-    let M1 = SrpInteger::from_hex(&client_session_proof);
+    let M1 =
+      SrpInteger::from_hex(&client_session_proof).map_err(|e| Error::new(Status::InvalidArg, e))?;
 
     // Safeguard against malicious A values (A % N should not be 0)
     if A.is_zero() || A.modulo(N).is_zero() {
@@ -140,7 +143,7 @@ impl Server {
 // Standalone functions for backward compatibility
 /// Generate server's ephemeral key pair
 #[napi(js_name = "generateServerEphemeral")]
-pub fn generate_ephemeral(verifier: String) -> ServerEphemeral {
+pub fn generate_ephemeral(verifier: String) -> Result<ServerEphemeral> {
   // Create a default server and use its method
   Server::new(None).generate_ephemeral(verifier)
 }

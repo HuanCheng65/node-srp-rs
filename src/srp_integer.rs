@@ -54,32 +54,30 @@ impl SrpInteger {
   }
 
   #[cfg(not(any(target_os = "macos", target_env = "msvc")))]
-  pub fn from_hex(hex: &str) -> Self {
+  pub fn from_hex(hex: &str) -> Result<Self, String> {
     // Clean input
     let cleaned_hex = hex.trim().replace(" ", "").replace("\n", "");
 
-    let value = Integer::parse_radix(&cleaned_hex, 16)
-      .expect(&format!("Invalid hex string: {}", hex))
-      .complete();
-
-    Self {
-      value,
-      hex_length: Some(cleaned_hex.len()),
+    match Integer::parse_radix(&cleaned_hex, 16) {
+      Ok(value) => Ok(Self {
+        value: value.complete(),
+        hex_length: Some(cleaned_hex.len()),
+      }),
+      Err(_) => Err(format!("Invalid hex string: {}", hex)),
     }
   }
 
   #[cfg(any(target_os = "macos", target_env = "msvc"))]
-  pub fn from_hex(hex: &str) -> Self {
+  pub fn from_hex(hex: &str) -> Result<Self, String> {
     // Clean input
     let cleaned_hex = hex.trim().replace(" ", "").replace("\n", "");
 
-    let value = BigUint::parse_bytes(cleaned_hex.as_bytes(), 16)
-      .expect(&format!("Invalid hex string: {}", hex))
-      .into();
-
-    Self {
-      value,
-      hex_length: Some(cleaned_hex.len()),
+    match BigUint::parse_bytes(cleaned_hex.as_bytes(), 16) {
+      Some(value) => Ok(Self {
+        value: value.into(),
+        hex_length: Some(cleaned_hex.len()),
+      }),
+      None => Err(format!("Invalid hex string: {}", hex)),
     }
   }
 
@@ -137,14 +135,14 @@ impl SrpInteger {
   }
 
   #[cfg(any(target_os = "macos", target_env = "msvc"))]
-
   pub fn random_integer(bytes: usize) -> Self {
     let mut rng = thread_rng();
     let mut buf = vec![0u8; bytes];
     rng.fill_bytes(&mut buf);
 
     let hex = hex::encode(&buf);
-    Self::from_hex(&hex)
+    // 这里的 unwrap 是安全的，因为我们生成的是有效的十六进制字符串
+    Self::from_hex(&hex).expect("Failed to parse valid hex")
   }
 
   pub fn equals(&self, other: &Self) -> bool {
